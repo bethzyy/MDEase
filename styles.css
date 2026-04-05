@@ -111,6 +111,11 @@ body {
   flex-shrink: 0;
 }
 
+#btn-toggle-sidebar {
+  flex-shrink: 0;
+  padding: 4px 6px;
+}
+
 /* ===== Format Buttons ===== */
 .fmt-btn {
   display: inline-flex;
@@ -188,6 +193,14 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+
+#sidebar.collapsed {
+  width: 0;
+  border-right: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ===== Sidebar Tabs (Segmented Control) ===== */

@@ -289,6 +289,9 @@
           </aside>
           <div id="content-wrapper">
             <header id="toolbar">
+              <button class="toolbar-btn" id="btn-toggle-sidebar" title="收起侧边栏">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V3.5A1.5 1.5 0 0 0 12.5 2h-9zM3 3.5a.5.5 0 0 1 .5-.5h3v10h-3a.5.5 0 0 1-.5-.5v-9zm4.5 9.5v-10h5a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-5z"/></svg>
+              </button>
               <div class="toolbar-center" id="format-toolbar">
                 <button class="fmt-btn" data-cmd="bold" title="加粗 (Ctrl+B)"><b>B</b></button>
                 <button class="fmt-btn" data-cmd="italic" title="斜体 (Ctrl+I)"><i>I</i></button>
@@ -739,6 +742,14 @@
     document.getElementById('btn-source').addEventListener('click', toggleMode);
     document.getElementById('btn-save-draft').addEventListener('click', saveCurrentDraft);
     document.getElementById('btn-export').addEventListener('click', exportAsMd);
+
+    // Sidebar toggle
+    document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      const btn = document.getElementById('btn-toggle-sidebar');
+      const collapsed = sidebar.classList.toggle('collapsed');
+      btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+    });
 
     setupFormatToolbar();
     setupWysiwygListeners();
