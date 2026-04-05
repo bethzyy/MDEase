@@ -1,0 +1,793 @@
+// content.js - MDEase WYSIWYG Markdown Editor
+(function () {
+  'use strict';
+
+  // ========== State ==========
+  const state = {
+    filePath: window.location.href,
+    rawMarkdown: '',
+    currentContent: '',
+    mode: 'wysiwyg', // 'wysiwyg' | 'source'
+    tocItems: [],
+    filename: '',
+    dirPath: '', // directory path of current file
+    dirName: '', // directory name for display
+    fileTree: [], // array of {name, path} for .md files in the directory
+    wysiwygDirty: false,
+  };
+
+  // ========== Path Helpers ==========
+  function getDirPath(filePath) {
+    try {
+      const url = new URL(filePath);
+      const pathname = url.pathname;
+      const lastSlash = pathname.lastIndexOf('/');
+      return pathname.substring(0, lastSlash + 1); // include trailing slash
+    } catch {
+      return '';
+    }
+  }
+
+  function getDirName(dirPath) {
+    const parts = dirPath.replace(/\/$/, '').split('/');
+    const name = parts[parts.length - 1] || parts[parts.length - 2] || '';
+    return decodeURIComponent(name);
+  }
+
+  // ========== Markdown Extraction ==========
+  function extractMarkdown() {
+    const pre = document.querySelector('pre');
+    if (pre) return pre.textContent;
+    return document.body ? document.body.innerText : '';
+  }
+
+  // ========== Slugify ==========
+  function slugify(text) {
+    const plain = text.replace(/<[^>]+>/g, '');
+    return plain
+      .toLowerCase()
+      .trim()
+      .replace(/[\s]+/g, '-')
+      .replace(/[^\w\u4e00-\u9fff-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  // ========== Configure Marked ==========
+  function configureMarked() {
+    const renderer = {
+      code({ text, lang }) {
+        const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
+        const highlighted = hljs.highlight(text, { language }).value;
+        return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+      },
+      heading({ text, depth }) {
+        const slug = slugify(text);
+        state.tocItems.push({ level: depth, text, slug });
+        return `<h${depth} id="${slug}"><a class="heading-anchor" href="#${slug}" aria-hidden="true">#</a>${text}</h${depth}>`;
+      },
+    };
+    marked.use({ renderer, gfm: true, breaks: false });
+  }
+
+  // ========== Configure Turndown ==========
+  let turndownService = null;
+  function configureTurndown() {
+    turndownService = new TurndownService({
+      headingStyle: 'atx',
+      codeBlockStyle: 'fenced',
+      bulletListMarker: '-',
+      emDelimiter: '*',
+      strongDelimiter: '**',
+    });
+
+    turndownService.addRule('headingAnchor', {
+      filter: (node) => node.nodeName === 'A' && node.classList.contains('heading-anchor'),
+      replacement: () => '',
+    });
+
+    turndownService.addRule('fencedCodeBlock', {
+      filter: (node) => node.nodeName === 'PRE' && node.firstChild && node.firstChild.nodeName === 'CODE',
+      replacement: (content, node) => {
+        const code = node.firstChild;
+        const lang = code.className ? (code.className.match(/language-(\S+)/) || [])[1] || '' : '';
+        return '\n```' + lang + '\n' + code.textContent + '\n```\n';
+      },
+    });
+
+    turndownService.addRule('taskListItems', {
+      filter: (node) => node.nodeName === 'LI' && node.querySelector('input[type="checkbox"]'),
+      replacement: (content, node) => {
+        const checkbox = node.querySelector('input[type="checkbox"]');
+        const checked = checkbox && checkbox.checked ? 'x' : ' ';
+        const text = node.textContent.replace(/\[.\]/, '').trim();
+        return `- [${checked}] ${text}\n`;
+      },
+    });
+  }
+
+  // ========== File Tree ==========
+  async function loadCachedFileList() {
+    try {
+      const files = await window.MDEaseDB.loadFileList(state.dirPath);
+      if (files && files.length > 0) {
+        state.fileTree = files;
+        renderFileTree();
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function renderFileTree() {
+    const container = document.getElementById('file-tree-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (state.fileTree.length === 0) {
+      container.innerHTML = '<li class="file-tree-empty">点击上方按钮选择文件夹</li>';
+      return;
+    }
+
+    state.fileTree.forEach((file) => {
+      const li = document.createElement('li');
+      li.className = 'file-tree-item';
+      if (file.name === state.filename) {
+        li.classList.add('active');
+      }
+      li.innerHTML = `<span class="file-icon">&#128196;</span><span class="file-name">${file.name}</span>`;
+      li.addEventListener('click', () => {
+        if (file.name === state.filename) return;
+        window.location.href = file.path;
+      });
+      container.appendChild(li);
+    });
+  }
+
+  function setupFolderPicker() {
+    // Create hidden file input for folder selection
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.webkitdirectory = true;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    input.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      // Filter for .md files
+      const mdFiles = files
+        .filter((f) => f.name.endsWith('.md') || f.name.endsWith('.markdown') || f.name.endsWith('.mdown'))
+        .map((f) => {
+          // Build file:// URL from the webkitRelativePath
+          const dirPath = state.dirPath;
+          const filePath = 'file://' + dirPath + encodeURIComponent(f.name);
+          return { name: f.name, path: filePath };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+
+      if (mdFiles.length === 0) {
+        showToast('该文件夹中没有找到 .md 文件', 'error');
+        return;
+      }
+
+      state.fileTree = mdFiles;
+      renderFileTree();
+
+      // Cache to IndexedDB
+      try {
+        window.MDEaseDB.saveFileList(state.dirPath, mdFiles);
+      } catch {
+        // ignore
+      }
+
+      showToast(`已加载 ${mdFiles.length} 个文件`);
+    });
+
+    // Bind the button
+    const btn = document.getElementById('btn-open-folder');
+    if (btn) {
+      btn.addEventListener('click', () => input.click());
+    }
+  }
+
+  // ========== Build UI ==========
+  function buildUI() {
+    // Extract filename and directory
+    try {
+      const pathname = new URL(state.filePath).pathname;
+      state.filename = decodeURIComponent(pathname.split('/').pop()) || 'document.md';
+      state.dirPath = getDirPath(state.filePath);
+      state.dirName = getDirName(state.dirPath);
+    } catch {
+      state.filename = 'document.md';
+      state.dirPath = '';
+      state.dirName = '';
+    }
+
+    // Clear Chrome's default rendering
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+
+    document.body.innerHTML = `
+      <div id="mdease-app">
+        <div id="toast-container"></div>
+        <header id="toolbar">
+          <div class="toolbar-left">
+            <span class="toolbar-brand">MDEase</span>
+            <span class="toolbar-filename">${state.filename}</span>
+          </div>
+          <div class="toolbar-center" id="format-toolbar">
+            <button class="fmt-btn" data-cmd="bold" title="加粗 (Ctrl+B)"><b>B</b></button>
+            <button class="fmt-btn" data-cmd="italic" title="斜体 (Ctrl+I)"><i>I</i></button>
+            <span class="fmt-sep"></span>
+            <button class="fmt-btn" data-cmd="h2" title="标题 2">H2</button>
+            <button class="fmt-btn" data-cmd="h3" title="标题 3">H3</button>
+            <span class="fmt-sep"></span>
+            <button class="fmt-btn" data-cmd="insertUnorderedList" title="无序列表">&#8226;</button>
+            <button class="fmt-btn" data-cmd="insertOrderedList" title="有序列表">1.</button>
+            <button class="fmt-btn" data-cmd="blockquote" title="引用">&gt;</button>
+            <button class="fmt-btn" data-cmd="codeBlock" title="代码块">&lt;/&gt;</button>
+            <button class="fmt-btn" data-cmd="link" title="链接">&#128279;</button>
+          </div>
+          <div class="toolbar-right">
+            <button class="toolbar-btn" id="btn-source" title="源码模式 (Ctrl+E)">源码</button>
+            <button class="toolbar-btn" id="btn-save-draft" title="保存草稿 (Ctrl+S)">保存草稿</button>
+            <button class="toolbar-btn" id="btn-export" title="导出 .md 文件">导出</button>
+          </div>
+        </header>
+        <div id="main-layout">
+          <aside id="sidebar">
+            <div id="sidebar-tabs">
+              <button class="sidebar-tab active" data-tab="files" title="文件">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5V6.5A1.5 1.5 0 0 0 14.5 5H8l-2-4H1.5z"/></svg>
+              </button>
+              <button class="sidebar-tab" data-tab="outline" title="大纲">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M2 2.5A.5.5 0 0 1 2.5 2h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 2.5zm0 5A.5.5 0 0 1 2.5 7h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 7zm0 5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/></svg>
+              </button>
+            </div>
+            <div id="panel-files" class="sidebar-panel">
+              <div id="file-tree-header">
+                <span class="dir-name">${state.dirName || '文件'}</span>
+                <button id="btn-open-folder" title="选择文件夹">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3l.04-.28A1.5 1.5 0 0 1 2 1.5h4.5l1.04 1.5H14a1 1 0 0 1 1 1v.5H.5V3zm0 1h15v8.5a1.5 1.5 0 0 1-1.5 1.5H2A1.5 1.5 0 0 1 .5 12.5V4z"/></svg>
+                </button>
+              </div>
+              <ul id="file-tree-list"></ul>
+            </div>
+            <div id="panel-outline" class="sidebar-panel hidden">
+              <div id="toc-filter-bar">
+                <input type="text" id="toc-filter-input" class="hidden" placeholder="搜索标题..." />
+                <button id="btn-toggle-filter" title="搜索标题">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
+                </button>
+              </div>
+              <ul id="toc-list"></ul>
+            </div>
+          </aside>
+          <main id="content-area">
+            <div id="wysiwyg-container">
+              <div id="preview-content" contenteditable="true" spellcheck="false"></div>
+            </div>
+            <div id="source-container" class="hidden">
+              <textarea id="source-textarea" spellcheck="false"></textarea>
+            </div>
+          </main>
+        </div>
+        <footer id="status-bar">
+          <span id="status-info"></span>
+        </footer>
+      </div>
+    `;
+  }
+
+  // ========== Render Preview ==========
+  function renderPreview(markdown) {
+    const content = markdown || state.currentContent;
+    state.tocItems = [];
+    state.wysiwygDirty = false;
+
+    const html = marked.parse(content);
+    const previewEl = document.getElementById('preview-content');
+    if (previewEl) {
+      previewEl.innerHTML = html;
+    }
+
+    generateTOC();
+    updateStatusBar(content);
+  }
+
+  // ========== Generate TOC ==========
+  function generateTOC() {
+    const container = document.getElementById('toc-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (state.tocItems.length === 0) {
+      container.innerHTML = '<li class="toc-empty">暂无标题</li>';
+      return;
+    }
+
+    const minLevel = Math.min(...state.tocItems.map((h) => h.level));
+
+    state.tocItems.forEach((item) => {
+      const li = document.createElement('li');
+      li.className = 'toc-item toc-level-' + item.level;
+      li.style.paddingLeft = (item.level - minLevel) * 16 + 12 + 'px';
+      li.innerHTML = `<a href="#${item.slug}">${item.text}</a>`;
+      container.appendChild(li);
+    });
+  }
+
+  // ========== Update Status Bar ==========
+  function updateStatusBar(content) {
+    const el = document.getElementById('status-info');
+    if (!el) return;
+    const text = content || state.currentContent || '';
+    const chars = text.length;
+    const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+    const words = text
+      .replace(/[\u4e00-\u9fff]/g, '')
+      .split(/\s+/)
+      .filter((w) => w.length > 0).length;
+    const totalWords = cjk + words;
+    const readMin = Math.max(1, Math.ceil(totalWords / 300));
+    el.textContent = `${chars} 字符 | ${totalWords} 词 | 约 ${readMin} 分钟阅读`;
+  }
+
+  // ========== Mode Switching ==========
+  function switchToWysiwyg() {
+    state.mode = 'wysiwyg';
+    const sourceEl = document.getElementById('source-textarea');
+    if (sourceEl && !sourceEl.classList.contains('hidden')) {
+      state.currentContent = sourceEl.value;
+    }
+    renderPreview(state.currentContent);
+
+    document.getElementById('wysiwyg-container').classList.remove('hidden');
+    document.getElementById('source-container').classList.add('hidden');
+    document.getElementById('format-toolbar').classList.remove('disabled');
+    document.getElementById('btn-source').classList.remove('active');
+    document.getElementById('btn-source').textContent = '源码';
+  }
+
+  function switchToSource() {
+    state.mode = 'source';
+    if (!state.wysiwygDirty) {
+      // currentContent is already the source markdown
+    } else {
+      const previewEl = document.getElementById('preview-content');
+      if (previewEl) {
+        state.currentContent = turndownService.turndown(previewEl.innerHTML);
+      }
+    }
+
+    const sourceEl = document.getElementById('source-textarea');
+    if (sourceEl) {
+      sourceEl.value = state.currentContent;
+    }
+
+    document.getElementById('wysiwyg-container').classList.add('hidden');
+    document.getElementById('source-container').classList.remove('hidden');
+    document.getElementById('format-toolbar').classList.add('disabled');
+    document.getElementById('btn-source').classList.add('active');
+    document.getElementById('btn-source').textContent = '预览';
+    sourceEl.focus();
+
+    updateStatusBar(state.currentContent);
+  }
+
+  function toggleMode() {
+    if (state.mode === 'wysiwyg') {
+      switchToSource();
+    } else {
+      switchToWysiwyg();
+    }
+  }
+
+  // ========== Draft Management ==========
+  async function saveCurrentDraft() {
+    try {
+      let content;
+      if (state.mode === 'source') {
+        content = document.getElementById('source-textarea').value;
+        state.currentContent = content;
+      } else {
+        const previewEl = document.getElementById('preview-content');
+        content = turndownService.turndown(previewEl.innerHTML);
+        state.currentContent = content;
+      }
+      await window.MDEaseDB.saveDraft(state.filePath, content);
+      showToast('草稿已保存');
+    } catch (err) {
+      showToast('保存失败: ' + err.message, 'error');
+    }
+  }
+
+  function loadDraftContent(draft) {
+    state.currentContent = draft.content;
+    if (state.mode === 'source') {
+      document.getElementById('source-textarea').value = draft.content;
+      updateStatusBar(draft.content);
+    } else {
+      renderPreview(draft.content);
+    }
+    showToast('草稿已加载');
+  }
+
+  async function checkForDraft() {
+    try {
+      const has = await window.MDEaseDB.hasDraft(state.filePath);
+      if (has) {
+        const draft = await window.MDEaseDB.loadDraft(state.filePath);
+        const timeStr = new Date(draft.lastModified).toLocaleString('zh-CN');
+        showToast(`发现草稿 (${timeStr})`, 'info', {
+          actionText: '加载草稿',
+          actionCallback: () => loadDraftContent(draft),
+        });
+      }
+    } catch {
+      // IndexedDB not available
+    }
+  }
+
+  // ========== Export ==========
+  function exportAsMd() {
+    let content;
+    if (state.mode === 'source') {
+      content = document.getElementById('source-textarea').value;
+    } else {
+      const previewEl = document.getElementById('preview-content');
+      content = turndownService.turndown(previewEl.innerHTML);
+    }
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = state.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('文件已导出');
+  }
+
+  // ========== Toast System ==========
+  function showToast(message, type = 'success', options = {}) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    let html = '<span class="toast-message">' + message + '</span>';
+    if (options.actionText) {
+      html += '<button class="toast-action">' + options.actionText + '</button>';
+    }
+    toast.innerHTML = html;
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add('toast-visible'));
+
+    if (options.actionText && options.actionCallback) {
+      toast.querySelector('.toast-action').addEventListener('click', () => {
+        options.actionCallback();
+        removeToast(toast);
+      });
+    }
+
+    setTimeout(() => removeToast(toast), 5000);
+  }
+
+  function removeToast(toast) {
+    if (!toast.parentNode) return;
+    toast.classList.remove('toast-visible');
+    toast.classList.add('toast-hiding');
+    toast.addEventListener('transitionend', () => toast.remove());
+  }
+
+  // ========== Format Toolbar ==========
+  function setupFormatToolbar() {
+    document.getElementById('format-toolbar').addEventListener('click', (e) => {
+      const btn = e.target.closest('.fmt-btn');
+      if (!btn || document.getElementById('format-toolbar').classList.contains('disabled')) return;
+
+      const cmd = btn.dataset.cmd;
+      switch (cmd) {
+        case 'bold':
+          document.execCommand('bold');
+          break;
+        case 'italic':
+          document.execCommand('italic');
+          break;
+        case 'h2':
+          document.execCommand('formatBlock', false, '<h2>');
+          break;
+        case 'h3':
+          document.execCommand('formatBlock', false, '<h3>');
+          break;
+        case 'insertUnorderedList':
+          document.execCommand('insertUnorderedList');
+          break;
+        case 'insertOrderedList':
+          document.execCommand('insertOrderedList');
+          break;
+        case 'blockquote':
+          document.execCommand('formatBlock', false, '<blockquote>');
+          break;
+        case 'codeBlock':
+          insertCodeBlock();
+          break;
+        case 'link':
+          insertLink();
+          break;
+      }
+    });
+  }
+
+  function insertCodeBlock() {
+    const selection = window.getSelection();
+    const text = selection.toString() || 'code here';
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.className = 'hljs';
+    code.textContent = text;
+    pre.appendChild(code);
+
+    if (selection.rangeCount) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(pre);
+      range.setStartAfter(pre);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+
+  function insertLink() {
+    const selection = window.getSelection();
+    const text = selection.toString() || 'link text';
+    const url = prompt('请输入链接地址:', 'https://');
+    if (url === null) return;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.textContent = text;
+
+    if (selection.rangeCount) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(a);
+      range.setStartAfter(a);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+
+  // ========== WYSIWYG Listeners ==========
+  function setupWysiwygListeners() {
+    const previewEl = document.getElementById('preview-content');
+    let debounceTimer = null;
+
+    previewEl.addEventListener('input', () => {
+      state.wysiwygDirty = true;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        rebuildTOCFromDOM();
+        const md = turndownService.turndown(previewEl.innerHTML);
+        updateStatusBar(md);
+      }, 300);
+    });
+
+    previewEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        document.execCommand('insertText', false, '    ');
+      }
+    });
+
+    previewEl.addEventListener('paste', (e) => {
+      const clipboardData = e.clipboardData || window.clipboardData;
+      const text = clipboardData.getData('text/plain');
+      if (text.includes('\t') || text.includes('```') || /^ {4}/m.test(text)) {
+        e.preventDefault();
+        document.execCommand('insertText', false, text);
+      }
+    });
+  }
+
+  function rebuildTOCFromDOM() {
+    const previewEl = document.getElementById('preview-content');
+    if (!previewEl) return;
+
+    state.tocItems = [];
+    previewEl.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading) => {
+      const clone = heading.cloneNode(true);
+      clone.querySelectorAll('.heading-anchor').forEach((a) => a.remove());
+      const text = clone.textContent.trim();
+      const slug = slugify(text);
+      if (!heading.id) heading.id = slug;
+      state.tocItems.push({
+        level: parseInt(heading.tagName[1]),
+        text,
+        slug: heading.id,
+      });
+    });
+    generateTOC();
+  }
+
+  // ========== Source Editor Listeners ==========
+  function setupSourceListeners() {
+    const sourceEl = document.getElementById('source-textarea');
+    let debounceTimer = null;
+
+    sourceEl.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        state.currentContent = sourceEl.value;
+        updateStatusBar(state.currentContent);
+      }, 200);
+    });
+
+    sourceEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = sourceEl.selectionStart;
+        const end = sourceEl.selectionEnd;
+        sourceEl.value = sourceEl.value.substring(0, start) + '    ' + sourceEl.value.substring(end);
+        sourceEl.selectionStart = sourceEl.selectionEnd = start + 4;
+      }
+    });
+  }
+
+  // ========== Scroll Spy ==========
+  function setupScrollSpy() {
+    const previewEl = document.getElementById('preview-content');
+    if (!previewEl) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            document.querySelectorAll('.toc-item.active').forEach((el) => el.classList.remove('active'));
+            const tocLink = document.querySelector('.toc-item a[href="#' + entry.target.id + '"]');
+            if (tocLink) {
+              tocLink.closest('.toc-item').classList.add('active');
+            }
+          }
+        });
+      },
+      { root: previewEl, rootMargin: '-80px 0px -80% 0px', threshold: 0 }
+    );
+
+    function observeHeadings() {
+      previewEl.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => observer.observe(h));
+    }
+
+    observeHeadings();
+
+    const mo = new MutationObserver(() => observeHeadings());
+    mo.observe(previewEl, { childList: true, subtree: true });
+  }
+
+  // ========== Keyboard Shortcuts ==========
+  function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveCurrentDraft();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        toggleMode();
+      }
+      if (e.key === 'Escape' && state.mode === 'source') {
+        switchToWysiwyg();
+      }
+    });
+  }
+
+  // ========== Event Listeners ==========
+  function setupEventListeners() {
+    document.getElementById('btn-source').addEventListener('click', toggleMode);
+    document.getElementById('btn-save-draft').addEventListener('click', saveCurrentDraft);
+    document.getElementById('btn-export').addEventListener('click', exportAsMd);
+
+    setupFormatToolbar();
+    setupWysiwygListeners();
+    setupSourceListeners();
+    setupKeyboardShortcuts();
+    setupFolderPicker();
+    setupSidebarTabs();
+    setupTocFilter();
+
+    // TOC click → smooth scroll
+    document.getElementById('toc-list').addEventListener('click', (e) => {
+      const link = e.target.closest('a');
+      if (!link) return;
+      e.preventDefault();
+      const id = link.getAttribute('href').slice(1);
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
+
+  // ========== Sidebar Tab Switching ==========
+  function setupSidebarTabs() {
+    document.getElementById('sidebar-tabs').addEventListener('click', (e) => {
+      const tab = e.target.closest('.sidebar-tab');
+      if (!tab) return;
+      const tabName = tab.dataset.tab;
+      document.querySelectorAll('.sidebar-tab').forEach((b) => b.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
+      document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
+    });
+  }
+
+  // ========== TOC Filter ==========
+  function setupTocFilter() {
+    const input = document.getElementById('toc-filter-input');
+    const toggleBtn = document.getElementById('btn-toggle-filter');
+
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = !input.classList.contains('hidden');
+      input.classList.toggle('hidden', isOpen);
+      if (!isOpen) {
+        input.value = '';
+        input.focus();
+        filterTOC('');
+      }
+    });
+
+    input.addEventListener('input', () => filterTOC(input.value));
+  }
+
+  function filterTOC(keyword) {
+    const items = document.querySelectorAll('#toc-list .toc-item');
+    const kw = keyword.toLowerCase().trim();
+    items.forEach((item) => {
+      const text = item.textContent.toLowerCase();
+      item.classList.toggle('filtered-out', kw && !text.includes(kw));
+    });
+  }
+
+  // ========== Init ==========
+  async function init() {
+    console.log('[MDEase] Initializing on:', state.filePath);
+
+    // 1. Extract markdown
+    state.rawMarkdown = extractMarkdown();
+    state.currentContent = state.rawMarkdown;
+
+    // 2. Configure parsers
+    configureMarked();
+    configureTurndown();
+
+    // 3. Build UI
+    buildUI();
+
+    // 4. Render preview
+    renderPreview(state.currentContent);
+
+    // 5. Load cached file tree
+    await loadCachedFileList();
+
+    // 6. Check for draft
+    await checkForDraft();
+
+    // 7. Setup events
+    setupEventListeners();
+
+    // 8. Scroll spy
+    setupScrollSpy();
+
+    console.log('[MDEase] Ready.');
+  }
+
+  init();
+})();
