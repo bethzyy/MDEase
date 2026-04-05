@@ -266,30 +266,6 @@
     document.body.innerHTML = `
       <div id="mdease-app">
         <div id="toast-container"></div>
-        <header id="toolbar">
-          <div class="toolbar-left">
-            <span class="toolbar-brand">MDEase</span>
-            <span class="toolbar-filename">${state.filename}</span>
-          </div>
-          <div class="toolbar-center" id="format-toolbar">
-            <button class="fmt-btn" data-cmd="bold" title="加粗 (Ctrl+B)"><b>B</b></button>
-            <button class="fmt-btn" data-cmd="italic" title="斜体 (Ctrl+I)"><i>I</i></button>
-            <span class="fmt-sep"></span>
-            <button class="fmt-btn" data-cmd="h2" title="标题 2">H2</button>
-            <button class="fmt-btn" data-cmd="h3" title="标题 3">H3</button>
-            <span class="fmt-sep"></span>
-            <button class="fmt-btn" data-cmd="insertUnorderedList" title="无序列表">&#8226;</button>
-            <button class="fmt-btn" data-cmd="insertOrderedList" title="有序列表">1.</button>
-            <button class="fmt-btn" data-cmd="blockquote" title="引用">&gt;</button>
-            <button class="fmt-btn" data-cmd="codeBlock" title="代码块">&lt;/&gt;</button>
-            <button class="fmt-btn" data-cmd="link" title="链接">&#128279;</button>
-          </div>
-          <div class="toolbar-right">
-            <button class="toolbar-btn" id="btn-source" title="源码模式 (Ctrl+E)">源码</button>
-            <button class="toolbar-btn" id="btn-save-draft" title="保存草稿 (Ctrl+S)">保存草稿</button>
-            <button class="toolbar-btn" id="btn-export" title="导出 .md 文件">导出</button>
-          </div>
-        </header>
         <div id="main-layout">
           <aside id="sidebar">
             <div id="sidebar-tabs">
@@ -299,32 +275,52 @@
               <button class="sidebar-tab" data-tab="outline" title="大纲">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M2 2.5A.5.5 0 0 1 2.5 2h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 2.5zm0 5A.5.5 0 0 1 2.5 7h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 7zm0 5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/></svg>
               </button>
+              <button class="sidebar-tab sidebar-tab-action disabled" id="btn-toggle-filter" title="搜索标题">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
+              </button>
             </div>
             <div id="panel-files" class="sidebar-panel">
               <ul id="file-tree-list"></ul>
             </div>
             <div id="panel-outline" class="sidebar-panel hidden">
-              <div id="toc-filter-bar">
-                <input type="text" id="toc-filter-input" class="hidden" placeholder="搜索标题..." />
-                <button id="btn-toggle-filter" title="搜索标题">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
-                </button>
-              </div>
+              <input type="text" id="toc-filter-input" class="hidden" placeholder="搜索标题..." />
               <ul id="toc-list"></ul>
             </div>
           </aside>
-          <main id="content-area">
-            <div id="wysiwyg-container">
-              <div id="preview-content" contenteditable="true" spellcheck="false"></div>
-            </div>
-            <div id="source-container" class="hidden">
-              <textarea id="source-textarea" spellcheck="false"></textarea>
-            </div>
-          </main>
+          <div id="content-wrapper">
+            <header id="toolbar">
+              <div class="toolbar-center" id="format-toolbar">
+                <button class="fmt-btn" data-cmd="bold" title="加粗 (Ctrl+B)"><b>B</b></button>
+                <button class="fmt-btn" data-cmd="italic" title="斜体 (Ctrl+I)"><i>I</i></button>
+                <span class="fmt-sep"></span>
+                <button class="fmt-btn" data-cmd="h2" title="标题 2">H2</button>
+                <button class="fmt-btn" data-cmd="h3" title="标题 3">H3</button>
+                <span class="fmt-sep"></span>
+                <button class="fmt-btn" data-cmd="insertUnorderedList" title="无序列表">&#8226;</button>
+                <button class="fmt-btn" data-cmd="insertOrderedList" title="有序列表">1.</button>
+                <button class="fmt-btn" data-cmd="blockquote" title="引用">&gt;</button>
+                <button class="fmt-btn" data-cmd="codeBlock" title="代码块">&lt;/&gt;</button>
+                <button class="fmt-btn" data-cmd="link" title="链接">&#128279;</button>
+              </div>
+              <div class="toolbar-right">
+                <button class="toolbar-btn" id="btn-source" title="源码模式 (Ctrl+E)">源码</button>
+                <button class="toolbar-btn" id="btn-save-draft" title="保存草稿 (Ctrl+S)">保存草稿</button>
+                <button class="toolbar-btn" id="btn-export" title="导出 .md 文件">导出</button>
+              </div>
+            </header>
+            <main id="content-area">
+              <div id="wysiwyg-container">
+                <div id="preview-content" contenteditable="true" spellcheck="false"></div>
+              </div>
+              <div id="source-container" class="hidden">
+                <textarea id="source-textarea" spellcheck="false"></textarea>
+              </div>
+            </main>
+            <footer id="status-bar">
+              <span id="status-info"></span>
+            </footer>
+          </div>
         </div>
-        <footer id="status-bar">
-          <span id="status-info"></span>
-        </footer>
       </div>
     `;
   }
@@ -767,14 +763,27 @@
 
   // ========== Sidebar Tab Switching ==========
   function setupSidebarTabs() {
+    const filterBtn = document.getElementById('btn-toggle-filter');
+    const filterInput = document.getElementById('toc-filter-input');
+
     document.getElementById('sidebar-tabs').addEventListener('click', (e) => {
-      const tab = e.target.closest('.sidebar-tab');
+      const tab = e.target.closest('.sidebar-tab[data-tab]');
       if (!tab) return;
       const tabName = tab.dataset.tab;
-      document.querySelectorAll('.sidebar-tab').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.sidebar-tab[data-tab]').forEach((b) => b.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
       document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
+
+      // 放大镜：文件 tab 时禁用，大纲 tab 时启用
+      filterBtn.classList.toggle('disabled', tabName !== 'outline');
+      // 切换到文件 tab 时关闭搜索框
+      if (tabName !== 'outline') {
+        filterInput.classList.add('hidden');
+        filterInput.value = '';
+        filterTOC('');
+        filterBtn.classList.remove('active');
+      }
     });
   }
 
@@ -784,11 +793,16 @@
     const toggleBtn = document.getElementById('btn-toggle-filter');
 
     toggleBtn.addEventListener('click', () => {
+      if (toggleBtn.classList.contains('disabled')) return;
       const isOpen = !input.classList.contains('hidden');
       input.classList.toggle('hidden', isOpen);
+      toggleBtn.classList.toggle('active', !isOpen);
       if (!isOpen) {
         input.value = '';
         input.focus();
+        filterTOC('');
+      } else {
+        input.value = '';
         filterTOC('');
       }
     });
@@ -823,15 +837,15 @@
     // 4. Render preview
     renderPreview(state.currentContent);
 
-    // 5. Auto-scan directory for file list
-    const scanned = await autoScanDirectory();
+    // 5. Load cached file list first (instant, no flash)
+    const hasCache = await loadCachedFileList();
 
-    // 6. If auto-scan failed, try cached file list
-    if (!scanned) {
-      await loadCachedFileList();
+    // 6. Only scan if no cache (first visit to this directory)
+    if (!hasCache) {
+      autoScanDirectory();
     }
 
-    // 6. Check for draft
+    // 7. Check for draft
     await checkForDraft();
 
     // 7. Setup events
