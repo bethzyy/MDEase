@@ -107,16 +107,71 @@
   }
 
   // ========== File Tree ==========
+
+  // 从目录列表 HTML 中提取 .md 文件
+  function parseMdLinksFromDoc(doc, dirUrl) {
+    const links = doc.querySelectorAll('a');
+    const mdFiles = [];
+    links.forEach((link) => {
+      const href = link.getAttribute('href');
+      if (!href) return;
+      if (href.endsWith('/') || href.startsWith('../') || href.startsWith('?')) return;
+      if (!/\.(md|markdown|mdown)$/i.test(href)) return;
+      const name = decodeURIComponent(href.split('/').pop());
+      const filePath = dirUrl + encodeURIComponent(name);
+      mdFiles.push({ name, path: filePath });
+    });
+    return mdFiles;
+  }
+
+  // 保存扫描结果
+  function applyFileTree(mdFiles) {
+    if (!mdFiles || mdFiles.length === 0) return false;
+    mdFiles.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    state.fileTree = mdFiles;
+    renderFileTree();
+    try { window.MDEaseDB.saveFileList(state.dirPath, mdFiles); } catch {}
+    return true;
+  }
+
+  // 自动扫描当前目录（通过 background service worker）
+  async function autoScanDirectory() {
+    if (!state.dirPath) return false;
+    const dirUrl = 'file://' + state.dirPath;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'scanDirectory',
+        dirUrl,
+      });
+      if (response && response.success && response.files && response.files.length > 0) {
+        const mdFiles = response.files.map((href) => {
+          const fullUrl = new URL(href, dirUrl).href;
+          const name = decodeURIComponent(fullUrl.split('/').pop());
+          return { name, path: fullUrl };
+        });
+        return applyFileTree(mdFiles);
+      }
+    } catch (e) {
+      console.log('[MDEase] 自动扫描失败:', e.message);
+    }
+
+    console.log('[MDEase] 自动扫描目录失败，回退到缓存');
+    return false;
+  }
+
   async function loadCachedFileList() {
     try {
       const files = await window.MDEaseDB.loadFileList(state.dirPath);
       if (files && files.length > 0) {
         state.fileTree = files;
         renderFileTree();
+        return true;
       }
     } catch {
       // ignore
     }
+    return false;
   }
 
   function renderFileTree() {
@@ -125,7 +180,7 @@
     container.innerHTML = '';
 
     if (state.fileTree.length === 0) {
-      container.innerHTML = '<li class="file-tree-empty">点击上方按钮选择文件夹</li>';
+      container.innerHTML = '<li class="file-tree-empty">暂无文件</li>';
       return;
     }
 
@@ -246,12 +301,6 @@
               </button>
             </div>
             <div id="panel-files" class="sidebar-panel">
-              <div id="file-tree-header">
-                <span class="dir-name">${state.dirName || '文件'}</span>
-                <button id="btn-open-folder" title="选择文件夹">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 3l.04-.28A1.5 1.5 0 0 1 2 1.5h4.5l1.04 1.5H14a1 1 0 0 1 1 1v.5H.5V3zm0 1h15v8.5a1.5 1.5 0 0 1-1.5 1.5H2A1.5 1.5 0 0 1 .5 12.5V4z"/></svg>
-                </button>
-              </div>
               <ul id="file-tree-list"></ul>
             </div>
             <div id="panel-outline" class="sidebar-panel hidden">
@@ -774,8 +823,13 @@
     // 4. Render preview
     renderPreview(state.currentContent);
 
-    // 5. Load cached file tree
-    await loadCachedFileList();
+    // 5. Auto-scan directory for file list
+    const scanned = await autoScanDirectory();
+
+    // 6. If auto-scan failed, try cached file list
+    if (!scanned) {
+      await loadCachedFileList();
+    }
 
     // 6. Check for draft
     await checkForDraft();
