@@ -2,6 +2,8 @@
 
 > WYSIWYG Markdown 编辑器 Chrome 扩展 — 像飞书一样直接在预览界面编辑本地 .md 文件。
 
+![MDEase 主界面](screenshot.png)
+
 ## 功能特性
 
 - **WYSIWYG 编辑** — What You See Is What You Get，渲染后的 Markdown 直接点击编辑，所见即所得
@@ -9,6 +11,7 @@
 - **源码模式** — Ctrl+E 切换原始 Markdown 编辑（适合复杂结构）
 - **文件树导航** — 自动扫描当前目录下所有 .md 文件，点击切换
 - **大纲目录** — 自动生成标题目录，支持搜索过滤
+- **侧边栏折叠** — 点击工具栏左上角按钮收起/展开侧边栏
 - **草稿存储** — IndexedDB 自动缓存，刷新不丢失
 - **导出** — 一键导出为 .md 文件
 - **代码高亮** — highlight.js 支持 190+ 种语言

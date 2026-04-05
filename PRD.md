@@ -150,6 +150,7 @@ Blob → <a download> → .md 文件下载
 - WYSIWYG 编辑 + 源码模式
 - 文件树自动扫描当前目录（background service worker）
 - 大纲目录 + 搜索过滤（tab 栏集成放大镜图标）
+- 侧边栏折叠/展开（工具栏左上角切换按钮）
 - 缓存优先加载策略（IndexedDB）
 - 草稿 IndexedDB 存储
 - 导出 .md 文件
