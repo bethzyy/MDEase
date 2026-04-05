@@ -54,17 +54,17 @@
 ### 3.4 侧边栏
 
 #### 文件树视图
-- 顶部分段控件：文件夹图标 ↔ 列表图标
-- 文件夹图标高亮时显示文件树
-- 用户点击「选择文件夹」按钮 → `<input webkitdirectory>` → 过滤 .md 文件
+- 顶部分段控件：文件夹图标 ↔ 列表图标 ↔ 放大镜图标
+- 文件夹图标高亮时显示文件树，放大镜灰化禁用
+- 自动扫描当前文档所在目录下的所有 .md 文件（通过 background service worker）
 - 当前文件蓝色高亮
 - 点击其他文件跳转打开
 - 文件列表缓存到 IndexedDB，下次自动加载
 
 #### 大纲视图
-- 列表图标高亮时显示标题目录（TOC）
+- 列表图标高亮时显示标题目录（TOC），放大镜可用
 - 从 h1-h6 标题自动生成
-- 支持搜索过滤（可折叠搜索框）
+- 放大镜图标在 tab 栏，点击展开/收起搜索框，输入关键词实时过滤
 - 点击标题平滑滚动到对应位置
 - Scroll Spy 高亮当前阅读位置
 
@@ -96,7 +96,7 @@
 - 中文文件名正确显示
 
 ### 4.3 安全
-- 零额外权限声明（不需要 fileSystem、downloads）
+- 最小权限声明：`scripting`（目录扫描）+ `file:///*`（host 权限）
 - 不访问任何外部网络资源
 - 不收集任何用户数据
 
@@ -108,6 +108,7 @@
 ├─────────────────────────────────────────────┤
 │  manifest.json (MV3)                        │
 │  content_scripts: file:///*/*.md           │
+│  background: service_worker (background.js)│
 ├─────────────────────────────────────────────┤
 │  加载顺序:                                   │
 │  1. marked.min.js    → window.marked       │
@@ -116,6 +117,7 @@
 │  4. db.js            → window.MDEaseDB      │
 │  5. content.js       → 主逻辑 IIFE          │
 │  6. styles.css       → 自动注入              │
+│  background.js       → 目录扫描 Service Worker│
 └─────────────────────────────────────────────┘
 ```
 
@@ -137,17 +139,18 @@ Blob → <a download> → .md 文件下载
 
 ## 6. 已知限制
 
-1. **file:// 目录枚举**：浏览器安全限制，无法自动列出目录文件，需用户手动选择文件夹
+1. **file:// 目录枚举**：content script 无法直接访问目录，通过 background service worker 打开后台标签页扫描。首次扫描会短暂显示后台标签页，后续从 IndexedDB 缓存加载
 2. **turndown 往返有损**：HTML→Markdown 转换无法完美还原所有格式（通过 dirty flag 最小化往返）
 3. **contenteditable 局限**：复杂编辑操作（如表格编辑）建议切换到源码模式
 4. **文件列表持久性**：清除浏览器数据会丢失 IndexedDB 中的草稿和文件列表缓存
 
 ## 7. 版本规划
 
-### v1.0.0（当前）
+### v1.0.1（当前）
 - WYSIWYG 编辑 + 源码模式
-- 文件树 + 大纲目录（分段控件切换）
-- TOC 搜索过滤
+- 文件树自动扫描当前目录（background service worker）
+- 大纲目录 + 搜索过滤（tab 栏集成放大镜图标）
+- 缓存优先加载策略（IndexedDB）
 - 草稿 IndexedDB 存储
 - 导出 .md 文件
 
