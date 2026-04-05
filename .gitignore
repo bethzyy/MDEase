@@ -24,3 +24,9 @@ dist/
 
 # Test temp files
 test/
+test*.md
+
+# Reference images (tracked as docs/reference/README.md, not the images themselves)
+docs/reference/*.png
+docs/reference/*.jpg
+docs/reference/*.jpeg

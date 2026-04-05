@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- **WYSIWYG 编辑** — 渲染后的 Markdown 直接点击编辑，所见即所得
+- **WYSIWYG 编辑** — What You See Is What You Get，渲染后的 Markdown 直接点击编辑，所见即所得
 - **格式工具栏** — 加粗、斜体、标题、列表、引用、代码块、链接
 - **源码模式** — Ctrl+E 切换原始 Markdown 编辑（适合复杂结构）
 - **文件树导航** — 选择文件夹后浏览所有 .md 文件，点击切换
