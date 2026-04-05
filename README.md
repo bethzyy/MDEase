@@ -2,7 +2,7 @@
 
 > WYSIWYG Markdown 编辑器 Chrome 扩展 — 像飞书一样直接在预览界面编辑本地 .md 文件。
 
-![MDEase 主界面](screenshot.png)
+![MDEase 主界面](docs/screenshot.png)
 
 ## 功能特性
 
@@ -76,3 +76,8 @@ MDEase/
 ## License
 
 MIT
+
+## 文档
+
+- [产品需求文档 (PRD)](docs/PRD.md)
+- [UI 参考设计](docs/reference/README.md)
