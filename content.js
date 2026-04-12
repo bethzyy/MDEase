@@ -150,13 +150,14 @@
           const name = decodeURIComponent(fullUrl.split('/').pop());
           return { name, path: fullUrl };
         });
+        console.log('[MDEase] 扫描完成，找到', mdFiles.length, '个 .md 文件');
         return applyFileTree(mdFiles);
+      } else {
+        console.log('[MDEase] 目录扫描返回空结果:', dirUrl);
       }
     } catch (e) {
       console.log('[MDEase] 自动扫描失败:', e.message);
     }
-
-    console.log('[MDEase] 自动扫描目录失败，回退到缓存');
     return false;
   }
 
@@ -851,10 +852,9 @@
     // 5. Load cached file list first (instant, no flash)
     const hasCache = await loadCachedFileList();
 
-    // 6. Only scan if no cache (first visit to this directory)
-    if (!hasCache) {
-      autoScanDirectory();
-    }
+    // 6. Always rescan in background to keep cache fresh
+    //    (cached data shown instantly; scan silently updates if stale)
+    autoScanDirectory();
 
     // 7. Check for draft
     await checkForDraft();
