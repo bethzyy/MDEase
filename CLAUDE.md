@@ -31,8 +31,8 @@ All libs expose global variables: `window.marked`, `window.hljs`, `window.Turndo
 
 | File | Role |
 |------|------|
-| `content.js` | Single IIFE containing all UI logic, rendering, editing, event handling |
-| `background.js` | Service Worker — receives `scanDirectory` messages, opens background tab, extracts .md file links via `chrome.scripting.executeScript` |
+| `content.js` | Single IIFE containing all UI logic, rendering, editing, translation, event handling |
+| `background.js` | Service Worker — `scanDirectory` (file tree), `translateMarkdown` (ZhipuAI API via Anthropic-compatible endpoint), `getApiKey`/`setApiKey` (chrome.storage.local) |
 | `db.js` | IndexedDB wrapper — two stores: `drafts` (keyPath: path) and `filelists` (keyPath: dirPath) |
 | `styles.css` | All styles including highlight.js GitHub Dark theme, CSS custom properties in `:root` |
 
@@ -44,6 +44,7 @@ file:///*.md → Chrome renders <pre> → content.js extractMarkdown()
   ↔ (turndown ↔ marked) → source textarea view
   → Ctrl+S → turndown() → IndexedDB draft
   → Export → Blob + <a download>
+  → Translate → background.js → ZhipuAI GLM-4-Flash (Anthropic API) → translated markdown
 ```
 
 ### Directory Scanning (background.js)
@@ -55,11 +56,21 @@ Content scripts cannot access `file://` directories (CORS blocks fetch/XHR/ifram
 
 Init sequence: load IndexedDB cache first (instant) → only scan if no cache (avoids tab flash on every navigation).
 
+### Translation (background.js)
+
+Content scripts on `file://` cannot make cross-origin fetch calls (CORS). The background service worker handles API calls:
+1. content.js sends `{ type: 'translateMarkdown', markdown, apiKey }` via `chrome.runtime.sendMessage`
+2. background.js calls `https://open.bigmodel.cn/api/anthropic/v1/messages` (Anthropic-compatible format)
+3. Returns translated markdown to content.js
+4. API key stored in `chrome.storage.local`, configured via in-page settings dialog
+
 ### State Management
 
 All state lives in a single `state` object inside content.js's IIFE. Key flags:
 - `state.mode` — `'wysiwyg'` or `'source'`
 - `state.wysiwygDirty` — prevents unnecessary turndown round-trips (only converts HTML→MD when user actually edited)
+- `state.isTranslated` — whether currently viewing translated content
+- `state.translatedMarkdown` — cached translation result
 
 ### Layout Structure
 

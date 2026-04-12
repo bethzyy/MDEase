@@ -82,6 +82,18 @@
 
 ### 3.7 状态栏
 - 底部显示：字符数、词数（中英文混合计算）、预估阅读时间
+- 翻译状态下追加「已翻译」标识
+
+### 3.8 英译中翻译
+- 工具栏「翻译」按钮，点击将英文文档翻译为中文展示
+- 使用智谱AI GLM-4-Flash 模型（通过 Anthropic 兼容接口）
+- 翻译过程中按钮显示「翻译中...」并禁用
+- 翻译完成后按钮变为「原文」，点击可切回英文原文
+- 翻译在 Markdown 层面进行，代码块、URL、文件路径保持原样
+- 两种模式（WYSIWYG/源码）下均可使用翻译功能
+- 翻译状态下切换模式，翻译内容保持
+- API Key 通过弹窗设置，保存在 chrome.storage.local
+- 首次使用无 API Key 时自动弹出设置对话框
 
 ## 4. 非功能需求
 
@@ -96,8 +108,8 @@
 - 中文文件名正确显示
 
 ### 4.3 安全
-- 最小权限声明：`scripting`（目录扫描）+ `file:///*`（host 权限）
-- 不访问任何外部网络资源
+- 最小权限声明：`scripting`（目录扫描）+ `storage`（API Key 存储）+ `file:///*` + `https://open.bigmodel.cn/*`（host 权限）
+- API Key 存储在 chrome.storage.local，不上传到任何第三方服务
 - 不收集任何用户数据
 
 ## 5. 技术架构
@@ -135,6 +147,8 @@ WYSIWYG 编辑视图 ←→ (turndown ↔ marked) → 源码视图
 IndexedDB 草稿存储
     ↓ (导出)
 Blob → <a download> → .md 文件下载
+    ↓ (翻译)
+content.js → background.js → ZhipuAI GLM-4-Flash API → 翻译后的 Markdown
 ```
 
 ## 6. 已知限制
@@ -146,7 +160,7 @@ Blob → <a download> → .md 文件下载
 
 ## 7. 版本规划
 
-### v1.0.1（当前）
+### v1.1.0（当前）
 - WYSIWYG 编辑 + 源码模式
 - 文件树自动扫描当前目录（background service worker）
 - 大纲目录 + 搜索过滤（tab 栏集成放大镜图标）
@@ -154,8 +168,9 @@ Blob → <a download> → .md 文件下载
 - 缓存优先加载策略（IndexedDB）
 - 草稿 IndexedDB 存储
 - 导出 .md 文件
+- 英译中翻译（ZhipuAI GLM-4-Flash，Anthropic 兼容接口）
 
-### v1.1.0（计划）
+### v1.2.0（计划）
 - 深色模式
 - 自动保存（定时 30s）
 - 拖拽文件到浏览器直接打开

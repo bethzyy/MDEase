@@ -9,6 +9,7 @@
 - **WYSIWYG 编辑** — What You See Is What You Get，渲染后的 Markdown 直接点击编辑，所见即所得
 - **格式工具栏** — 加粗、斜体、标题、列表、引用、代码块、链接
 - **源码模式** — Ctrl+E 切换原始 Markdown 编辑（适合复杂结构）
+- **英译中翻译** — 一键将英文文档翻译为中文，支持原文/译文切换，代码块保持原样
 - **文件树导航** — 自动扫描当前目录下所有 .md 文件，点击切换
 - **大纲目录** — 自动生成标题目录，支持搜索过滤
 - **侧边栏折叠** — 点击工具栏左上角按钮收起/展开侧边栏
@@ -34,6 +35,7 @@
 | Ctrl+B / Ctrl+I | 加粗 / 斜体快捷键 |
 | Ctrl+E | 切换源码/预览模式 |
 | Ctrl+S | 保存草稿 |
+| 工具栏「翻译」按钮 | 英文文档翻译为中文（再次点击切回原文） |
 | Escape | 从源码模式返回预览 |
 | Tab | 插入 4 空格缩进 |
 | 侧边栏文件夹图标 | 文件树视图（自动扫描当前目录） |
@@ -46,8 +48,10 @@
 - **marked v17** — Markdown → HTML 解析（GFM 支持）
 - **highlight.js v11** — 代码语法高亮
 - **turndown** — HTML → Markdown 逆向转换
-- **Background Service Worker** — 自动扫描当前目录文件列表
+- **Background Service Worker** — 目录扫描 + 翻译 API 代理
 - **IndexedDB** — 本地草稿存储 + 文件列表缓存
+- **ZhipuAI GLM-4-Flash** — 英译中翻译（通过 Anthropic 兼容接口）
+- **chrome.storage.local** — API Key 安全存储
 - **原生 JS + CSS** — 零框架依赖
 
 ## 项目结构
@@ -55,8 +59,8 @@
 ```
 MDEase/
 ├── manifest.json       # MV3 扩展配置
-├── background.js       # Service Worker：目录扫描
-├── content.js          # 主逻辑：UI、渲染、编辑、事件
+├── background.js       # Service Worker：目录扫描 + 翻译 API 调用
+├── content.js          # 主逻辑：UI、渲染、编辑、翻译、事件
 ├── db.js               # IndexedDB 存储模块
 ├── styles.css          # 全部样式 + highlight.js 主题
 ├── lib/
@@ -72,6 +76,7 @@ MDEase/
 - 用户需手动开启「允许访问文件网址」权限（Chrome 安全限制）
 - 文件树通过 background service worker 自动扫描当前目录，首次扫描会短暂打开后台标签页
 - 文件列表缓存到 IndexedDB，同一目录再次打开直接加载，无需重复扫描
+- 翻译功能需要智谱AI API Key，首次点击「翻译」时在弹出的对话框中配置，Key 保存在 chrome.storage.local
 
 ## License
 
