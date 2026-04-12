@@ -96,5 +96,16 @@ window.MDEaseDB = (function () {
     });
   }
 
-  return { saveDraft, loadDraft, deleteDraft, hasDraft, saveFileList, loadFileList };
+  async function loadFileListMeta(dirPath) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(FILELIST_STORE, 'readonly');
+      const store = tx.objectStore(FILELIST_STORE);
+      const request = store.get(dirPath);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  return { saveDraft, loadDraft, deleteDraft, hasDraft, saveFileList, loadFileList, loadFileListMeta };
 })();

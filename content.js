@@ -125,9 +125,15 @@
   }
 
   // 保存扫描结果
+  function filesEqual(a, b) {
+    if (a.length !== b.length) return false;
+    return a.every((f, i) => f.path === b[i].path && f.name === b[i].name);
+  }
+
   function applyFileTree(mdFiles) {
     if (!mdFiles || mdFiles.length === 0) return false;
     mdFiles.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+    if (filesEqual(state.fileTree, mdFiles)) return true; // no change, skip re-render
     state.fileTree = mdFiles;
     renderFileTree();
     try { window.MDEaseDB.saveFileList(state.dirPath, mdFiles); } catch {}
@@ -852,9 +858,10 @@
     // 5. Load cached file list first (instant, no flash)
     const hasCache = await loadCachedFileList();
 
-    // 6. Always rescan in background to keep cache fresh
-    //    (cached data shown instantly; scan silently updates if stale)
-    autoScanDirectory();
+    // 6. Only scan if no cache (first visit to this directory)
+    if (!hasCache) {
+      autoScanDirectory();
+    }
 
     // 7. Check for draft
     await checkForDraft();
