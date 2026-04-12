@@ -22,6 +22,9 @@ dist/
 *.crx
 *.pem
 
+# Claude Code
+.claude/
+
 # Test temp files
 test/
 test*.md

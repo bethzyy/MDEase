@@ -14,6 +14,9 @@
     dirName: '', // directory name for display
     fileTree: [], // array of {name, path} for .md files in the directory
     wysiwygDirty: false,
+    translatedMarkdown: '',
+    isTranslated: false,
+    isTranslating: false,
   };
 
   // ========== Path Helpers ==========
@@ -313,6 +316,7 @@
                 <button class="fmt-btn" data-cmd="link" title="链接">&#128279;</button>
               </div>
               <div class="toolbar-right">
+                <button class="toolbar-btn" id="btn-translate" title="翻译为中文">翻译</button>
                 <button class="toolbar-btn" id="btn-source" title="源码模式 (Ctrl+E)">源码</button>
                 <button class="toolbar-btn" id="btn-save-draft" title="保存草稿 (Ctrl+S)">保存草稿</button>
                 <button class="toolbar-btn" id="btn-export" title="导出 .md 文件">导出</button>
@@ -387,7 +391,7 @@
       .filter((w) => w.length > 0).length;
     const totalWords = cjk + words;
     const readMin = Math.max(1, Math.ceil(totalWords / 300));
-    el.textContent = `${chars} 字符 | ${totalWords} 词 | 约 ${readMin} 分钟阅读`;
+    el.textContent = `${chars} 字符 | ${totalWords} 词 | 约 ${readMin} 分钟阅读` + (state.isTranslated ? ' | 已翻译' : '');
   }
 
   // ========== Mode Switching ==========
@@ -397,7 +401,8 @@
     if (sourceEl && !sourceEl.classList.contains('hidden')) {
       state.currentContent = sourceEl.value;
     }
-    renderPreview(state.currentContent);
+    const contentToRender = state.isTranslated ? state.translatedMarkdown : state.currentContent;
+    renderPreview(contentToRender);
 
     document.getElementById('wysiwyg-container').classList.remove('hidden');
     document.getElementById('source-container').classList.add('hidden');
@@ -417,9 +422,10 @@
       }
     }
 
+    const contentToUse = state.isTranslated ? state.translatedMarkdown : state.currentContent;
     const sourceEl = document.getElementById('source-textarea');
     if (sourceEl) {
-      sourceEl.value = state.currentContent;
+      sourceEl.value = contentToUse;
     }
 
     document.getElementById('wysiwyg-container').classList.add('hidden');
@@ -429,7 +435,7 @@
     document.getElementById('btn-source').textContent = '预览';
     sourceEl.focus();
 
-    updateStatusBar(state.currentContent);
+    updateStatusBar(contentToUse);
   }
 
   function toggleMode() {
@@ -539,6 +545,128 @@
     toast.classList.remove('toast-visible');
     toast.classList.add('toast-hiding');
     toast.addEventListener('transitionend', () => toast.remove());
+  }
+
+  // ========== Translation ==========
+  function showApiKeyDialog() {
+    const overlay = document.createElement('div');
+    overlay.id = 'settings-overlay';
+    overlay.innerHTML =
+      '<div class="settings-dialog">' +
+        '<h3>翻译设置</h3>' +
+        '<p>请输入智谱AI API Key（<a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank">获取API Key</a>）</p>' +
+        '<input type="password" id="api-key-input" placeholder="请输入 API Key..." />' +
+        '<div class="settings-actions">' +
+          '<button class="toolbar-btn" id="btn-settings-cancel">取消</button>' +
+          '<button class="toolbar-btn" id="btn-settings-save">保存</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    chrome.runtime.sendMessage({ type: 'getApiKey' }, (resp) => {
+      const input = document.getElementById('api-key-input');
+      if (input && resp && resp.apiKey) input.value = resp.apiKey;
+    });
+
+    document.getElementById('btn-settings-cancel').onclick = () => overlay.remove();
+    document.getElementById('btn-settings-save').onclick = () => {
+      const key = document.getElementById('api-key-input').value.trim();
+      if (!key) { showToast('请输入 API Key', 'error'); return; }
+      chrome.runtime.sendMessage({ type: 'setApiKey', apiKey: key }, () => {
+        showToast('API Key 已保存');
+        overlay.remove();
+      });
+    };
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+  }
+
+  async function handleTranslate() {
+    const btn = document.getElementById('btn-translate');
+    if (!btn) return;
+
+    // Check if extension context is still valid (e.g. after extension reload)
+    if (!chrome.runtime?.id) {
+      showToast('扩展已更新，请刷新页面后重试', 'error');
+      return;
+    }
+
+    // Toggle back to original
+    if (state.isTranslated) {
+      state.isTranslated = false;
+      btn.textContent = '翻译';
+      btn.title = '翻译为中文';
+      btn.classList.remove('active');
+
+      if (state.mode === 'source') {
+        document.getElementById('source-textarea').value = state.currentContent;
+      } else {
+        renderPreview(state.currentContent);
+      }
+      return;
+    }
+
+    // Check API key
+    let apiKey;
+    try {
+      const keyResp = await chrome.runtime.sendMessage({ type: 'getApiKey' });
+      apiKey = keyResp && keyResp.apiKey;
+    } catch {
+      showToast('扩展已更新，请刷新页面后重试', 'error');
+      return;
+    }
+    if (!apiKey) {
+      showApiKeyDialog();
+      return;
+    }
+
+    // Get current markdown
+    let markdown;
+    if (state.mode === 'source') {
+      markdown = document.getElementById('source-textarea').value;
+    } else if (state.wysiwygDirty) {
+      markdown = turndownService.turndown(document.getElementById('preview-content').innerHTML);
+    } else {
+      markdown = state.currentContent;
+    }
+
+    // Loading state
+    state.isTranslating = true;
+    btn.textContent = '翻译中...';
+    btn.disabled = true;
+
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        type: 'translateMarkdown',
+        markdown: markdown,
+        apiKey: apiKey,
+      });
+
+      if (resp && resp.success) {
+        state.translatedMarkdown = resp.translated;
+        state.isTranslated = true;
+        btn.textContent = '原文';
+        btn.title = '查看原文';
+        btn.classList.add('active');
+
+        if (state.mode === 'source') {
+          document.getElementById('source-textarea').value = resp.translated;
+        } else {
+          renderPreview(resp.translated);
+        }
+        showToast('翻译完成');
+      } else {
+        throw new Error(resp ? resp.error : '翻译失败');
+      }
+    } catch (err) {
+      showToast('翻译失败: ' + err.message, 'error');
+      btn.textContent = '翻译';
+    } finally {
+      state.isTranslating = false;
+      btn.disabled = false;
+    }
   }
 
   // ========== Format Toolbar ==========
@@ -747,6 +875,7 @@
   // ========== Event Listeners ==========
   function setupEventListeners() {
     document.getElementById('btn-source').addEventListener('click', toggleMode);
+    document.getElementById('btn-translate').addEventListener('click', handleTranslate);
     document.getElementById('btn-save-draft').addEventListener('click', saveCurrentDraft);
     document.getElementById('btn-export').addEventListener('click', exportAsMd);
 
