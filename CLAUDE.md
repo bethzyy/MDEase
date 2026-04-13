@@ -33,7 +33,7 @@ All libs expose global variables: `window.marked`, `window.hljs`, `window.Turndo
 |------|------|
 | `content.js` | Single IIFE containing all UI logic, rendering, editing, translation, event handling |
 | `background.js` | Service Worker — `scanDirectory` (file tree), `translateMarkdown` (ZhipuAI API via Anthropic-compatible endpoint), `getApiKey`/`setApiKey` (chrome.storage.local) |
-| `db.js` | IndexedDB wrapper — two stores: `drafts` (keyPath: path) and `filelists` (keyPath: dirPath) |
+| `db.js` | IndexedDB wrapper — two databases: `mdease-store` (drafts + filelists) and `mdease-translations` (translation cache, keyPath: path) |
 | `styles.css` | All styles including highlight.js GitHub Dark theme, CSS custom properties in `:root` |
 
 ### Data Flow
@@ -65,6 +65,8 @@ Content scripts on `file://` cannot make cross-origin fetch calls (CORS). The ba
 4. API key stored in `chrome.storage.local`, configured via in-page settings dialog
 
 **Translation cache**: content.js caches the translated result and the source markdown in memory. When toggling between original and translated view, if the source content hasn't changed, the cached translation is reused (no API call). Cache invalidates when: (a) user edits content, (b) page is refreshed.
+
+**Translation persistence**: Translation results are saved to a separate IndexedDB database (`mdease-translations`), keyed by file path. On page load, cached translations are loaded into memory state. This enables cache reuse across file switches and browser sessions without affecting the main database.
 
 ### State Management
 

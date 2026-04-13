@@ -664,6 +664,7 @@
         state.translatedMarkdown = resp.translated;
         state.translatedSourceMarkdown = markdown;
         state.isTranslated = true;
+        window.MDEaseDB.saveTranslation(state.filePath, markdown, resp.translated).catch(() => {});
         btn.textContent = '原文';
         btn.title = '查看原文';
         btn.classList.add('active');
@@ -1001,8 +1002,14 @@
     // 4. Render preview
     renderPreview(state.currentContent);
 
-    // 5. Load cached file list first (instant, no flash)
-    const hasCache = await loadCachedFileList();
+    // 5. Load cached file list (with timeout to prevent hanging)
+    let hasCache = false;
+    try {
+      hasCache = await Promise.race([
+        loadCachedFileList(),
+        new Promise(resolve => setTimeout(() => resolve(false), 3000))
+      ]);
+    } catch (e) { /* ignore */ }
 
     // 6. Only scan if no cache (first visit to this directory)
     if (!hasCache) {
@@ -1012,7 +1019,19 @@
     // 7. Check for draft
     await checkForDraft();
 
-    // 7. Setup events
+    // 8. Load translation cache from IndexedDB
+    try {
+      const cached = await Promise.race([
+        window.MDEaseDB.loadTranslation(state.filePath),
+        new Promise(resolve => setTimeout(() => resolve(null), 3000))
+      ]);
+      if (cached) {
+        state.translatedMarkdown = cached.translatedMarkdown;
+        state.translatedSourceMarkdown = cached.sourceMarkdown;
+      }
+    } catch (e) { /* ignore */ }
+
+    // 9. Setup events
     setupEventListeners();
 
     // 8. Scroll spy

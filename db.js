@@ -1,8 +1,8 @@
 // db.js - IndexedDB storage module for MDEase
 // Attaches API to window.MDEaseDB for content.js to use
 window.MDEaseDB = (function () {
-  const DB_NAME = 'mdease-drafts';
-  const DB_VERSION = 2;
+  const DB_NAME = 'mdease-store';
+  const DB_VERSION = 1;
   const DRAFTS_STORE = 'drafts';
   const FILELIST_STORE = 'filelists';
   let dbInstance = null;
@@ -107,5 +107,56 @@ window.MDEaseDB = (function () {
     });
   }
 
-  return { saveDraft, loadDraft, deleteDraft, hasDraft, saveFileList, loadFileList, loadFileListMeta };
+  // ===== Translation Cache (separate database to avoid version conflicts) =====
+  const TRANS_DB_NAME = 'mdease-translations';
+  const TRANS_DB_VERSION = 1;
+  const TRANSLATIONS_STORE = 'translations';
+  let transDbInstance = null;
+
+  function openTransDB() {
+    return new Promise((resolve, reject) => {
+      if (transDbInstance) return resolve(transDbInstance);
+      const request = indexedDB.open(TRANS_DB_NAME, TRANS_DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(TRANSLATIONS_STORE)) {
+          db.createObjectStore(TRANSLATIONS_STORE, { keyPath: 'path' });
+        }
+      };
+      request.onsuccess = (e) => {
+        transDbInstance = e.target.result;
+        resolve(transDbInstance);
+      };
+      request.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  async function saveTranslation(path, sourceMarkdown, translatedMarkdown) {
+    const db = await openTransDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(TRANSLATIONS_STORE, 'readwrite');
+      const store = tx.objectStore(TRANSLATIONS_STORE);
+      store.put({
+        path,
+        sourceMarkdown,
+        translatedMarkdown,
+        createdAt: Date.now(),
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  async function loadTranslation(path) {
+    const db = await openTransDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(TRANSLATIONS_STORE, 'readonly');
+      const store = tx.objectStore(TRANSLATIONS_STORE);
+      const request = store.get(path);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  return { saveDraft, loadDraft, deleteDraft, hasDraft, saveFileList, loadFileList, loadFileListMeta, saveTranslation, loadTranslation };
 })();
