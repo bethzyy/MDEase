@@ -64,6 +64,8 @@ Content scripts on `file://` cannot make cross-origin fetch calls (CORS). The ba
 3. Returns translated markdown to content.js
 4. API key stored in `chrome.storage.local`, configured via in-page settings dialog
 
+**Translation cache**: content.js caches the translated result and the source markdown in memory. When toggling between original and translated view, if the source content hasn't changed, the cached translation is reused (no API call). Cache invalidates when: (a) user edits content, (b) page is refreshed.
+
 ### State Management
 
 All state lives in a single `state` object inside content.js's IIFE. Key flags:
@@ -71,6 +73,7 @@ All state lives in a single `state` object inside content.js's IIFE. Key flags:
 - `state.wysiwygDirty` — prevents unnecessary turndown round-trips (only converts HTML→MD when user actually edited)
 - `state.isTranslated` — whether currently viewing translated content
 - `state.translatedMarkdown` — cached translation result
+- `state.translatedSourceMarkdown` — source markdown used for last translation (enables cache reuse when toggling original/translated without re-calling API)
 
 ### Layout Structure
 

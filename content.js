@@ -15,6 +15,7 @@
     fileTree: [], // array of {name, path} for .md files in the directory
     wysiwygDirty: false,
     translatedMarkdown: '',
+    translatedSourceMarkdown: '',
     isTranslated: false,
     isTranslating: false,
   };
@@ -632,6 +633,21 @@
       markdown = state.currentContent;
     }
 
+    // 缓存命中：原文未变，直接复用上次翻译
+    if (state.translatedMarkdown && markdown === state.translatedSourceMarkdown) {
+      state.isTranslated = true;
+      btn.textContent = '原文';
+      btn.title = '查看原文';
+      btn.classList.add('active');
+      if (state.mode === 'source') {
+        document.getElementById('source-textarea').value = state.translatedMarkdown;
+      } else {
+        renderPreview(state.translatedMarkdown);
+      }
+      showToast('已加载翻译缓存');
+      return;
+    }
+
     // Loading state
     state.isTranslating = true;
     btn.textContent = '翻译中...';
@@ -646,6 +662,7 @@
 
       if (resp && resp.success) {
         state.translatedMarkdown = resp.translated;
+        state.translatedSourceMarkdown = markdown;
         state.isTranslated = true;
         btn.textContent = '原文';
         btn.title = '查看原文';
