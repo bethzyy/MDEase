@@ -1,11 +1,27 @@
-# Dependencies
+# Environment & secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Node
 node_modules/
-package.json
-package-lock.json
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
 
@@ -13,24 +29,19 @@ package-lock.json
 .DS_Store
 Thumbs.db
 
-# Environment
-.env
-.env.*
+# Logs
+*.log
 
-# Build artifacts
-dist/
+# Debug
+*.pyc
+package.json
+package-lock.json
 *.crx
 *.pem
-
-# Claude Code
 .claude/
-
-# Test temp files
 test/
 test*.md
 test.md
-
-# Reference images (tracked as docs/reference/README.md, not the images themselves)
 docs/reference/*.png
 docs/reference/*.jpg
 docs/reference/*.jpeg
