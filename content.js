@@ -338,6 +338,16 @@
         </div>
       </div>
     `;
+
+    // Immediately apply saved tab state so there is no outline→files flash during async init
+    const savedTab = sessionStorage.getItem('mdease-active-tab') || 'outline';
+    if (savedTab !== 'outline') {
+      document.querySelector('.sidebar-tab[data-tab="outline"]')?.classList.remove('active');
+      document.querySelector(`.sidebar-tab[data-tab="${savedTab}"]`)?.classList.add('active');
+      document.getElementById('panel-files')?.classList.toggle('hidden', savedTab !== 'files');
+      document.getElementById('panel-outline')?.classList.add('hidden');
+      document.getElementById('btn-toggle-filter')?.classList.add('disabled');
+    }
   }
 
   // ========== Render Preview ==========
@@ -935,10 +945,16 @@
       const tab = e.target.closest('.sidebar-tab[data-tab]');
       if (!tab) return;
       const tabName = tab.dataset.tab;
+      sessionStorage.setItem('mdease-active-tab', tabName);
       document.querySelectorAll('.sidebar-tab[data-tab]').forEach((b) => b.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
       document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
+
+      // 切换到文件 tab 时刷新目录列表
+      if (tabName === 'files') {
+        autoScanDirectory();
+      }
 
       // 放大镜：文件 tab 时禁用，大纲 tab 时启用
       filterBtn.classList.toggle('disabled', tabName !== 'outline');
@@ -1011,8 +1027,10 @@
       ]);
     } catch (e) { /* ignore */ }
 
-    // 6. Always scan in background to refresh (cache above gives instant display)
-    autoScanDirectory();
+    // 6. Scan only if no cache (first visit). Subsequent refreshes happen when user opens the files panel.
+    if (!hasCache) {
+      autoScanDirectory();
+    }
 
     // 7. Check for draft
     await checkForDraft();
