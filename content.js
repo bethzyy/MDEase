@@ -280,20 +280,20 @@
         <div id="main-layout">
           <aside id="sidebar">
             <div id="sidebar-tabs">
-              <button class="sidebar-tab active" data-tab="files" title="文件">
+              <button class="sidebar-tab" data-tab="files" title="文件">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5V6.5A1.5 1.5 0 0 0 14.5 5H8l-2-4H1.5z"/></svg>
               </button>
-              <button class="sidebar-tab" data-tab="outline" title="大纲">
+              <button class="sidebar-tab active" data-tab="outline" title="大纲">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M2 2.5A.5.5 0 0 1 2.5 2h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 2.5zm0 5A.5.5 0 0 1 2.5 7h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 7zm0 5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/></svg>
               </button>
               <button class="sidebar-tab sidebar-tab-action disabled" id="btn-toggle-filter" title="搜索标题">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
               </button>
             </div>
-            <div id="panel-files" class="sidebar-panel">
+            <div id="panel-files" class="sidebar-panel hidden">
               <ul id="file-tree-list"></ul>
             </div>
-            <div id="panel-outline" class="sidebar-panel hidden">
+            <div id="panel-outline" class="sidebar-panel">
               <input type="text" id="toc-filter-input" class="hidden" placeholder="搜索标题..." />
               <ul id="toc-list"></ul>
             </div>
