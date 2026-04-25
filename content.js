@@ -1011,10 +1011,8 @@
       ]);
     } catch (e) { /* ignore */ }
 
-    // 6. Only scan if no cache (first visit to this directory)
-    if (!hasCache) {
-      autoScanDirectory();
-    }
+    // 6. Always scan in background to refresh (cache above gives instant display)
+    autoScanDirectory();
 
     // 7. Check for draft
     await checkForDraft();
