@@ -66,9 +66,10 @@
         return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
       },
       heading({ text, depth }) {
+        const parsed = marked.parseInline(text);
         const slug = slugify(text);
-        state.tocItems.push({ level: depth, text, slug });
-        return `<h${depth} id="${slug}"><a class="heading-anchor" href="#${slug}" aria-hidden="true">#</a>${text}</h${depth}>`;
+        state.tocItems.push({ level: depth, text: parsed, slug });
+        return `<h${depth} id="${slug}"><a class="heading-anchor" href="#${slug}" aria-hidden="true">#</a>${parsed}</h${depth}>`;
       },
     };
     marked.use({ renderer, gfm: true, breaks: false });
@@ -104,8 +105,87 @@
       replacement: (content, node) => {
         const checkbox = node.querySelector('input[type="checkbox"]');
         const checked = checkbox && checkbox.checked ? 'x' : ' ';
-        const text = node.textContent.replace(/\[.\]/, '').trim();
+        function extractInline(n) {
+          if (n.nodeType === 3) return n.textContent;
+          if (n.nodeName === 'INPUT') return '';
+          const tag = n.nodeName;
+          const inner = [...n.childNodes].map(extractInline).join('');
+          if (tag === 'SPAN' && n.style && n.style.color) return `<span style="color:${n.style.color}">${inner}</span>`;
+          if (tag === 'STRONG' || tag === 'B') return `**${inner}**`;
+          if (tag === 'EM' || tag === 'I') return `*${inner}*`;
+          if (tag === 'CODE') return `\`${n.textContent}\``;
+          if (tag === 'A') return `[${inner}](${n.getAttribute('href') || ''})`;
+          return inner;
+        }
+        const text = [...node.childNodes].map(extractInline).join('').trim();
         return `- [${checked}] ${text}\n`;
+      },
+    });
+
+    turndownService.addRule('coloredSpan', {
+      filter: (node) => node.nodeName === 'SPAN' && node.style && node.style.color,
+      replacement: (content, node) => {
+        if (node.querySelector('p,h1,h2,h3,h4,h5,h6,table,thead,tbody,tfoot,tr,th,td,ul,ol,li,blockquote,pre,div')) {
+          return content;
+        }
+        return `<span style="color:${node.style.color}">${node.innerHTML}</span>`;
+      },
+    });
+
+    turndownService.addRule('hr', {
+      filter: 'hr',
+      replacement: () => '\n\n---\n\n',
+    });
+
+    turndownService.addRule('table', {
+      filter: (node) => node.nodeName === 'TABLE',
+      replacement: (content, node) => {
+        function inlineContent(node) {
+          if (node.nodeType === 3) return node.textContent.replace(/\|/g, '\\|');
+          const tag = node.nodeName;
+          const inner = [...node.childNodes].map(inlineContent).join('');
+          if (tag === 'STRONG' || tag === 'B') return '**' + inner + '**';
+          if (tag === 'EM' || tag === 'I') return '*' + inner + '*';
+          if (tag === 'CODE') return '`' + node.textContent + '`';
+          if (tag === 'SPAN' && node.style && node.style.color) return `<span style="color:${node.style.color}">${inner}</span>`;
+          if (tag === 'A') return '[' + inner + '](' + (node.getAttribute('href') || '') + ')';
+          if (tag === 'BR') return ' ';
+          return inner;
+        }
+        function cellText(cell) {
+          return [...cell.childNodes].map(inlineContent).join('').replace(/\s+/g, ' ').trim();
+        }
+
+        const rows = [];
+        const thead = node.querySelector('thead');
+        const tbody = node.querySelector('tbody');
+
+        if (thead) {
+          const ths = [...thead.querySelectorAll('th, td')];
+          rows.push('| ' + ths.map(cellText).join(' | ') + ' |');
+          rows.push('| ' + ths.map(() => '---').join(' | ') + ' |');
+        }
+
+        const bodyRows = tbody
+          ? [...tbody.querySelectorAll('tr')]
+          : [...node.querySelectorAll('tr')].slice(thead ? 0 : 1);
+
+        if (!thead && bodyRows.length) {
+          const firstCells = [...bodyRows[0].querySelectorAll('td, th')];
+          rows.push('| ' + firstCells.map(cellText).join(' | ') + ' |');
+          rows.push('| ' + firstCells.map(() => '---').join(' | ') + ' |');
+          bodyRows.slice(1).forEach((row) => {
+            const cells = [...row.querySelectorAll('td, th')].map(cellText);
+            rows.push('| ' + cells.join(' | ') + ' |');
+          });
+        } else {
+          bodyRows.forEach((row) => {
+            const cells = [...row.querySelectorAll('td, th')].map(cellText);
+            rows.push('| ' + cells.join(' | ') + ' |');
+          });
+        }
+
+        return rows.length ? '\n\n' + rows.join('\n') + '\n\n' : content;
       },
     });
   }
@@ -315,6 +395,38 @@
                 <button class="fmt-btn" data-cmd="blockquote" title="引用">&gt;</button>
                 <button class="fmt-btn" data-cmd="codeBlock" title="代码块">&lt;/&gt;</button>
                 <button class="fmt-btn" data-cmd="link" title="链接">&#128279;</button>
+                <span class="fmt-sep"></span>
+                <div class="color-picker-wrapper" id="color-picker-wrapper">
+                  <button class="fmt-btn color-apply-btn" id="btn-color-apply" title="应用当前颜色">
+                    <span id="color-btn-indicator">A</span>
+                  </button>
+                  <button class="fmt-btn color-dropdown-btn" id="btn-color-dropdown" title="选择颜色">
+                    <svg width="7" height="4" viewBox="0 0 7 4" fill="currentColor"><path d="M0 0l3.5 4L7 0H0z"/></svg>
+                  </button>
+                  <div id="color-panel" class="color-panel hidden">
+                    <div class="color-swatches">
+                      <button class="color-swatch" data-color="#f44336" style="background:#f44336" title="红色"></button>
+                      <button class="color-swatch" data-color="#e91e63" style="background:#e91e63" title="粉红"></button>
+                      <button class="color-swatch" data-color="#9c27b0" style="background:#9c27b0" title="紫色"></button>
+                      <button class="color-swatch" data-color="#3f51b5" style="background:#3f51b5" title="靛蓝"></button>
+                      <button class="color-swatch" data-color="#2196f3" style="background:#2196f3" title="蓝色"></button>
+                      <button class="color-swatch" data-color="#00bcd4" style="background:#00bcd4" title="青色"></button>
+                      <button class="color-swatch" data-color="#4caf50" style="background:#4caf50" title="绿色"></button>
+                      <button class="color-swatch" data-color="#ff9800" style="background:#ff9800" title="橙色"></button>
+                      <button class="color-swatch" data-color="#ff5722" style="background:#ff5722" title="深橙"></button>
+                      <button class="color-swatch" data-color="#795548" style="background:#795548" title="棕色"></button>
+                      <button class="color-swatch" data-color="#607d8b" style="background:#607d8b" title="蓝灰"></button>
+                      <button class="color-swatch" data-color="#000000" style="background:#000000" title="黑色"></button>
+                    </div>
+                    <div class="color-custom-row">
+                      <label class="color-custom-label" title="自定义颜色">
+                        <input type="color" id="custom-color-input" value="#e53935">
+                        <span>自定义</span>
+                      </label>
+                      <button id="btn-clear-color">清除</button>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="toolbar-right">
                 <button class="toolbar-btn" id="btn-translate" title="翻译为中文">翻译</button>
@@ -736,6 +848,125 @@
     });
   }
 
+  function applyTextColor(color) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    let ancestor = range.commonAncestorContainer;
+    while (ancestor && ancestor.id !== 'preview-content') {
+      if (ancestor.nodeName === 'PRE' || ancestor.nodeName === 'CODE') {
+        showToast('代码块内不支持颜色标注', 'error');
+        return;
+      }
+      ancestor = ancestor.parentNode;
+    }
+    const probe = range.cloneContents();
+    if (probe.querySelector('p,h1,h2,h3,h4,h5,h6,table,thead,tbody,tfoot,tr,th,td,ul,ol,li,blockquote,pre,div')) {
+      showToast('请在单个段落内选择文字后再标色', 'error');
+      return;
+    }
+    const span = document.createElement('span');
+    span.style.color = color;
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+    range.setStartAfter(span);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    state.wysiwygDirty = true;
+    document.getElementById('color-btn-indicator').style.borderBottomColor = color;
+  }
+
+  function clearTextColor() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount || selection.isCollapsed) return;
+    const previewEl = document.getElementById('preview-content');
+    previewEl.querySelectorAll('span[style]').forEach((span) => {
+      if (span.style.color && selection.containsNode(span, true)) {
+        const parent = span.parentNode;
+        while (span.firstChild) parent.insertBefore(span.firstChild, span);
+        parent.removeChild(span);
+      }
+    });
+    state.wysiwygDirty = true;
+  }
+
+  function setupColorPicker() {
+    const wrapper = document.getElementById('color-picker-wrapper');
+    const panel = document.getElementById('color-panel');
+    const applyBtn = document.getElementById('btn-color-apply');
+    const dropBtn = document.getElementById('btn-color-dropdown');
+    const customInput = document.getElementById('custom-color-input');
+    const clearBtn = document.getElementById('btn-clear-color');
+    const indicator = document.getElementById('color-btn-indicator');
+
+    let currentColor = '#e53935';
+    let savedRange = null;
+
+    function setCurrentColor(color) {
+      currentColor = color;
+      indicator.style.borderBottomColor = color;
+      customInput.value = color;
+      chrome.storage.local.set({ 'mdease-custom-color': color });
+    }
+
+    function restoreRange() {
+      if (savedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+    }
+
+    // Init: load saved color
+    chrome.storage.local.get('mdease-custom-color', (result) => {
+      if (result['mdease-custom-color']) setCurrentColor(result['mdease-custom-color']);
+    });
+
+    // Apply button: mousedown prevents focus steal so selection stays intact
+    applyBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    applyBtn.addEventListener('click', () => applyTextColor(currentColor));
+
+    // Dropdown button: save range + toggle panel
+    dropBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const sel = window.getSelection();
+      if (sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
+      panel.classList.toggle('hidden');
+    });
+
+    panel.addEventListener('mousedown', (e) => e.preventDefault());
+
+    panel.querySelectorAll('.color-swatch').forEach((swatch) => {
+      swatch.addEventListener('click', () => {
+        restoreRange();
+        setCurrentColor(swatch.dataset.color);
+        applyTextColor(currentColor);
+        panel.classList.add('hidden');
+        savedRange = null;
+      });
+    });
+
+    customInput.addEventListener('change', () => {
+      restoreRange();
+      setCurrentColor(customInput.value);
+      applyTextColor(currentColor);
+      panel.classList.add('hidden');
+      savedRange = null;
+    });
+
+    clearBtn.addEventListener('click', () => {
+      restoreRange();
+      clearTextColor();
+      panel.classList.add('hidden');
+      savedRange = null;
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!wrapper.contains(e.target)) panel.classList.add('hidden');
+    });
+  }
+
   function insertCodeBlock() {
     const selection = window.getSelection();
     const text = selection.toString() || 'code here';
@@ -916,6 +1147,7 @@
     });
 
     setupFormatToolbar();
+    setupColorPicker();
     setupWysiwygListeners();
     setupSourceListeners();
     setupKeyboardShortcuts();
@@ -951,8 +1183,8 @@
       document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
       document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
 
-      // 切换到文件 tab 时刷新目录列表
-      if (tabName === 'files') {
+      // 切换到文件 tab 时：无缓存才扫描，有缓存直接显示已有列表（避免每次切换都创建临时 tab）
+      if (tabName === 'files' && state.fileTree.length === 0) {
         autoScanDirectory();
       }
 

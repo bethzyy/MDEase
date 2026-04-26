@@ -54,7 +54,7 @@ Content scripts cannot access `file://` directories (CORS blocks fetch/XHR/ifram
 2. `chrome.scripting.executeScript()` — reads DOM `<a>` links for .md files
 3. Closes tab, returns file list to content script via `chrome.runtime.sendMessage`
 
-Init sequence: load IndexedDB cache first (instant) → only scan if no cache (avoids tab flash on every navigation).
+Init sequence: load IndexedDB cache first (instant) → only scan if no cache (avoids tab flash on every navigation). Switching to the files sidebar tab also triggers a scan, but only when `state.fileTree` is empty (prevents repeated background tab flash on every tab switch).
 
 ### Translation (background.js)
 
@@ -67,6 +67,20 @@ Content scripts on `file://` cannot make cross-origin fetch calls (CORS). The ba
 **Translation cache**: content.js caches the translated result and the source markdown in memory. When toggling between original and translated view, if the source content hasn't changed, the cached translation is reused (no API call). Cache invalidates when: (a) user edits content, (b) page is refreshed.
 
 **Translation persistence**: Translation results are saved to a separate IndexedDB database (`mdease-translations`), keyed by file path. On page load, cached translations are loaded into memory state. This enables cache reuse across file switches and browser sessions without affecting the main database.
+
+### Text Color
+
+Users can apply inline colors via a split button in the toolbar (A = apply last color, ▼ = open picker with 12 swatches + custom color input). Last-used color is persisted to `chrome.storage.local` (`mdease-custom-color`).
+
+`applyTextColor(color)` — wraps selection in `<span style="color:...">`. Guards:
+- Ancestor check: rejects if selection is inside `<pre>` or `<code>` (code blocks can't store inline HTML)
+- Content check: rejects if `cloneContents()` contains any block element (`p`, `h1-h6`, `table`, `thead`/`tbody`/`tfoot`/`tr`/`th`/`td`, `ul`/`ol`/`li`, `blockquote`, `pre`, `div`)
+
+Custom turndown rules in `configureTurndown()` preserve colors on save:
+- `coloredSpan` rule — serializes `<span style="color:...">` as raw HTML inline; degrades to plain content if span contains block elements
+- `table` rule's `inlineContent()` — recursively walks cell DOM, preserves color spans alongside bold/italic/code/link
+- `taskListItems` rule — same recursive extraction for checkbox list items
+- `hr` rule — forces `---` output (prevents turndown default `* * *`)
 
 ### State Management
 

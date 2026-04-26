@@ -149,6 +149,124 @@ body {
   margin: 0 4px;
 }
 
+/* ===== Color Picker ===== */
+.color-picker-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.color-picker-wrapper .color-apply-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.color-picker-wrapper .color-dropdown-btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  width: 14px;
+  min-width: unset;
+  padding: 0 3px;
+  border-left: 1px solid var(--color-border-light);
+}
+
+.color-picker-wrapper:hover .color-apply-btn,
+.color-picker-wrapper:hover .color-dropdown-btn {
+  background: var(--color-surface);
+  border-color: var(--color-border-light);
+}
+
+#color-btn-indicator {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  border-bottom: 3px solid #e53935;
+  padding-bottom: 1px;
+}
+
+.color-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 152px;
+}
+
+.color-panel.hidden { display: none; }
+
+.color-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.2);
+  border-color: var(--color-border);
+}
+
+.color-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.color-custom-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.color-custom-label input[type="color"] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+}
+
+#btn-clear-color {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+#btn-clear-color:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 /* ===== Toolbar Buttons ===== */
 .toolbar-btn {
   display: inline-flex;
