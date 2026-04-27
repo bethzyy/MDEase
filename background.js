@@ -71,14 +71,24 @@ async function translateMarkdown(markdown, apiKey) {
 }
 
 async function scanDirectory(dirUrl) {
-  const tab = await chrome.tabs.create({ url: dirUrl, active: false });
+  // Use a tiny popup window instead of a tab in the current window to avoid tab bar flicker
+  const win = await chrome.windows.create({
+    url: dirUrl,
+    type: 'popup',
+    focused: false,
+    width: 1,
+    height: 1,
+    left: 0,
+    top: 0,
+  });
+  const tabId = win.tabs[0].id;
 
   try {
-    await waitForTabComplete(tab.id);
+    await waitForTabComplete(tabId);
     await delay(300); // ensure DOM is rendered
 
     const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
+      target: { tabId },
       func: () => {
         return Array.from(document.querySelectorAll('a'))
           .map((a) => a.getAttribute('href'))
@@ -97,7 +107,7 @@ async function scanDirectory(dirUrl) {
     return results[0]?.result || [];
   } finally {
     try {
-      await chrome.tabs.remove(tab.id);
+      await chrome.windows.remove(win.id);
     } catch {}
   }
 }

@@ -468,7 +468,9 @@
     state.tocItems = [];
     state.wysiwygDirty = false;
 
-    const html = marked.parse(content);
+    // Strip <style> and <script> tags to prevent content CSS from leaking into sidebar/toolbar
+    let html = marked.parse(content);
+    html = html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '');
     const previewEl = document.getElementById('preview-content');
     if (previewEl) {
       previewEl.innerHTML = html;
@@ -496,7 +498,13 @@
       const li = document.createElement('li');
       li.className = 'toc-item toc-level-' + item.level;
       li.style.paddingLeft = (item.level - minLevel) * 16 + 12 + 'px';
-      li.innerHTML = `<a href="#${item.slug}">${item.text}</a>`;
+      // Strip HTML from item.text to prevent nested <a> tags rendering as blue links
+      const a = document.createElement('a');
+      a.href = '#' + item.slug;
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = item.text;
+      a.textContent = tempDiv.textContent;
+      li.appendChild(a);
       container.appendChild(li);
     });
   }
@@ -1183,8 +1191,8 @@
       document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
       document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
 
-      // 切换到文件 tab 时：无缓存才扫描，有缓存直接显示已有列表（避免每次切换都创建临时 tab）
-      if (tabName === 'files' && state.fileTree.length === 0) {
+      // 切换到文件 tab 时刷新目录列表
+      if (tabName === 'files') {
         autoScanDirectory();
       }
 
