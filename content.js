@@ -1185,26 +1185,41 @@
       const tab = e.target.closest('.sidebar-tab[data-tab]');
       if (!tab) return;
       const tabName = tab.dataset.tab;
+
+      // 禁用过渡以避免闪烁
+      const tabs = document.querySelectorAll('.sidebar-tab[data-tab]');
+      tabs.forEach(t => t.classList.add('no-transition'));
+
       sessionStorage.setItem('mdease-active-tab', tabName);
-      document.querySelectorAll('.sidebar-tab[data-tab]').forEach((b) => b.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
-      document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
 
-      // 切换到文件 tab 时刷新目录列表
-      if (tabName === 'files') {
-        autoScanDirectory();
-      }
+      // 使用 requestAnimationFrame 确保 DOM 更新在同一帧完成
+      requestAnimationFrame(() => {
+        tabs.forEach((b) => b.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-files').classList.toggle('hidden', tabName !== 'files');
+        document.getElementById('panel-outline').classList.toggle('hidden', tabName !== 'outline');
 
-      // 放大镜：文件 tab 时禁用，大纲 tab 时启用
-      filterBtn.classList.toggle('disabled', tabName !== 'outline');
-      // 切换到文件 tab 时关闭搜索框
-      if (tabName !== 'outline') {
-        filterInput.classList.add('hidden');
-        filterInput.value = '';
-        filterTOC('');
-        filterBtn.classList.remove('active');
-      }
+        // 切换到文件 tab 时：init 阶段已通过 sessionStorage flag 完成本会话首次扫描，
+        // 这里仅在 fileTree 仍为空（极端情况：init 扫描失败）时兜底，避免每次切换都闪后台 tab
+        if (tabName === 'files' && state.fileTree.length === 0) {
+          autoScanDirectory();
+        }
+
+        // 放大镜：文件 tab 时禁用，大纲 tab 时启用
+        filterBtn.classList.toggle('disabled', tabName !== 'outline');
+        // 切换到文件 tab 时关闭搜索框
+        if (tabName !== 'outline') {
+          filterInput.classList.add('hidden');
+          filterInput.value = '';
+          filterTOC('');
+          filterBtn.classList.remove('active');
+        }
+
+        // 下一帧恢复过渡效果
+        requestAnimationFrame(() => {
+          tabs.forEach(t => t.classList.remove('no-transition'));
+        });
+      });
     });
   }
 
@@ -1267,8 +1282,11 @@
       ]);
     } catch (e) { /* ignore */ }
 
-    // 6. Scan only if no cache (first visit). Subsequent refreshes happen when user opens the files panel.
-    if (!hasCache) {
+    // 6. Scan once per browser session per directory. Cache provides instant display;
+    //    background scan silently refreshes stale data (e.g., files added since last scan).
+    const sessionScanKey = 'mdease-scanned-' + state.dirPath;
+    if (!sessionStorage.getItem(sessionScanKey)) {
+      sessionStorage.setItem(sessionScanKey, '1');
       autoScanDirectory();
     }
 
