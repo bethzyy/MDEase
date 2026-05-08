@@ -759,6 +759,46 @@ body {
   border-radius: 0;
 }
 
+/* Mermaid */
+#preview-content .mermaid-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+  text-align: center;
+  user-select: none;
+}
+
+#preview-content .mermaid-block .mermaid-source {
+  display: none;
+}
+
+#preview-content .mermaid-block .mermaid-rendered {
+  display: inline-block;
+  max-width: 100%;
+}
+
+#preview-content .mermaid-block .mermaid-rendered svg {
+  max-width: 100%;
+  height: auto;
+}
+
+#preview-content .mermaid-block[data-mermaid="pending"] .mermaid-rendered::before {
+  content: "正在渲染图表…";
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+}
+
+#preview-content .mermaid-block .mermaid-error {
+  text-align: left;
+  color: var(--color-error);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 /* Table */
 #preview-content table {
   border-collapse: collapse;

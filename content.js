@@ -58,9 +58,17 @@
   }
 
   // ========== Configure Marked ==========
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function configureMarked() {
     const renderer = {
       code({ text, lang }) {
+        if (lang === 'mermaid') {
+          const escaped = escapeHtml(text);
+          return `<div class="mermaid-block" contenteditable="false" data-mermaid="pending"><pre class="mermaid-source">${escaped}</pre><div class="mermaid-rendered"></div></div>`;
+        }
         const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
         const highlighted = hljs.highlight(text, { language }).value;
         return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
@@ -89,6 +97,15 @@
     turndownService.addRule('headingAnchor', {
       filter: (node) => node.nodeName === 'A' && node.classList.contains('heading-anchor'),
       replacement: () => '',
+    });
+
+    turndownService.addRule('mermaidBlock', {
+      filter: (node) => node.nodeType === 1 && node.classList && node.classList.contains('mermaid-block'),
+      replacement: (content, node) => {
+        const sourceEl = node.querySelector('.mermaid-source');
+        const source = sourceEl ? sourceEl.textContent : '';
+        return '\n\n```mermaid\n' + source.replace(/\s+$/, '') + '\n```\n\n';
+      },
     });
 
     turndownService.addRule('fencedCodeBlock', {
@@ -478,6 +495,51 @@
 
     generateTOC();
     updateStatusBar(content);
+    renderMermaidBlocks();
+  }
+
+  // ========== Mermaid Rendering ==========
+  let mermaidInitialized = false;
+  function ensureMermaidInitialized() {
+    if (mermaidInitialized || !window.mermaid) return;
+    try {
+      window.mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'strict',
+        fontFamily: 'inherit',
+      });
+      mermaidInitialized = true;
+    } catch (e) {
+      console.warn('[MDEase] mermaid init failed:', e);
+    }
+  }
+
+  async function renderMermaidBlocks() {
+    if (!window.mermaid) return;
+    ensureMermaidInitialized();
+    const blocks = document.querySelectorAll('.mermaid-block[data-mermaid="pending"]');
+    for (const block of blocks) {
+      const sourceEl = block.querySelector('.mermaid-source');
+      const target = block.querySelector('.mermaid-rendered');
+      if (!sourceEl || !target) continue;
+      const source = sourceEl.textContent;
+      try {
+        const id = 'mmd-' + Math.random().toString(36).slice(2);
+        const result = await window.mermaid.render(id, source);
+        if (!block.isConnected) continue;
+        target.innerHTML = result.svg;
+        if (typeof result.bindFunctions === 'function') {
+          try { result.bindFunctions(target); } catch {}
+        }
+        block.dataset.mermaid = 'rendered';
+      } catch (err) {
+        if (!block.isConnected) continue;
+        const msg = (err && err.message) ? err.message : String(err);
+        target.innerHTML = '<div class="mermaid-error">Mermaid 渲染失败：' + escapeHtml(msg) + '</div>';
+        block.dataset.mermaid = 'error';
+      }
+    }
   }
 
   // ========== Generate TOC ==========
